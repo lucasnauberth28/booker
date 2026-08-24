@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState } from "react"
 import useSWR from "swr"
@@ -52,6 +52,7 @@ export function NewBookWizardDialog({
   const [totalPaginas, setTotalPaginas] = useState(24)
 
   // Step 2: Cover Art
+  const [coverOption, setCoverOption] = useState<"ai" | "upload">("ai")
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [coverFileName, setCoverFileName] = useState<string>("")
 
@@ -87,6 +88,7 @@ export function NewBookWizardDialog({
     const file = e.target.files?.[0]
     if (file) {
       setCoverFileName(file.name)
+      setCoverOption("upload")
       const reader = new FileReader()
       reader.onload = () => {
         setCoverPreview(reader.result as string)
@@ -145,6 +147,13 @@ export function NewBookWizardDialog({
         })
       }
 
+      // 3. Trigger AI Cover Generation if opted
+      if (coverOption === "ai") {
+        api.books.generateCover(newBook.id).then(() => {
+          toast.success("Capa do livro gerada com sucesso pela IA!")
+        }).catch(() => {})
+      }
+
       toast.success(`Livro "${titulo}" criado com sucesso!`)
       
       // Reset form
@@ -152,6 +161,7 @@ export function NewBookWizardDialog({
       setNicho("")
       setTotalPaginas(24)
       setCoverPreview(null)
+      setCoverOption("ai")
       setBasePrompt("")
       setStep(1)
 
@@ -306,64 +316,114 @@ export function NewBookWizardDialog({
           {step === 2 && (
             <div className="space-y-4 animate-in fade-in-50 slide-in-from-right-4 duration-200">
               <div className="text-center">
-                <h4 className="text-sm font-bold text-slate-900">Arte da Capa</h4>
+                <h4 className="text-sm font-bold text-slate-900">Arte da Capa do Livro</h4>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Faça upload de uma capa personalizada ou utilize o gerador automático para a vitrine.
+                  Escolha como deseja definir a capa do seu livro KDP.
                 </p>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                {/* Cover Preview Card */}
-                <div className="w-36 aspect-[3/4] rounded-2xl bg-white shadow-md border border-slate-200 overflow-hidden relative flex flex-col items-center justify-center p-3 shrink-0">
-                  {coverPreview ? (
-                    <img
-                      src={coverPreview}
-                      alt="Preview da capa"
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  ) : (
-                    <div className="w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-2">
-                      <ImageIcon className="w-6 h-6 text-slate-300 mb-1" />
-                      <span className="text-[9px] font-bold text-slate-500 uppercase">
-                        Mockup KDP
-                      </span>
+              {/* Cover Options Grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCoverOption("ai")
+                    setCoverPreview(null)
+                    setCoverFileName("")
+                  }}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    coverOption === "ai"
+                      ? "border-blue-600 bg-blue-50/50 shadow-sm ring-2 ring-blue-500/20"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                      <Sparkles className="w-4 h-4" />
                     </div>
-                  )}
-                </div>
+                    <Badge variant="success" className="text-[10px] font-bold">
+                      Recomendado
+                    </Badge>
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-black text-slate-900">Gerar Capa com IA</h5>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      A IA cria uma capa colorida exclusiva baseada no título e nicho.
+                    </p>
+                  </div>
+                </button>
 
-                {/* Upload Zone */}
-                <div className="flex-1 space-y-3 w-full">
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white rounded-2xl cursor-pointer transition-all hover:bg-blue-50/30">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Upload className="w-7 h-7 text-blue-500 mb-1" />
-                      <p className="text-xs font-semibold text-slate-700">
-                        {coverFileName || "Clique para escolher uma imagem de capa"}
-                      </p>
-                      <p className="text-[11px] text-slate-400">PNG, JPG até 5MB</p>
+                <button
+                  type="button"
+                  onClick={() => setCoverOption("upload")}
+                  className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                    coverOption === "upload"
+                      ? "border-blue-600 bg-blue-50/50 shadow-sm ring-2 ring-blue-500/20"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="h-8 w-8 rounded-xl bg-slate-800 text-white flex items-center justify-center shadow-xs">
+                      <Upload className="w-4 h-4" />
                     </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                  </label>
-
-                  {coverPreview && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setCoverPreview(null)
-                        setCoverFileName("")
-                      }}
-                      className="text-xs text-red-600 hover:bg-red-50 w-full"
-                    >
-                      Remover Imagem e Usar Capa Automática
-                    </Button>
-                  )}
-                </div>
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-black text-slate-900">Fazer Upload</h5>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      Envie um arquivo PNG ou JPG do seu computador.
+                    </p>
+                  </div>
+                </button>
               </div>
+
+              {/* Upload Zone (Only when upload is selected) */}
+              {coverOption === "upload" && (
+                <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-2xl bg-slate-50 border border-slate-200 animate-in fade-in-50 duration-200">
+                  <div className="w-28 aspect-[3/4] rounded-2xl bg-white shadow-md border border-slate-200 overflow-hidden relative flex flex-col items-center justify-center p-2 shrink-0">
+                    {coverPreview ? (
+                      <img
+                        src={coverPreview}
+                        alt="Preview da capa"
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : (
+                      <div className="w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-2">
+                        <ImageIcon className="w-6 h-6 text-slate-300 mb-1" />
+                        <span className="text-[9px] font-bold text-slate-500 uppercase">
+                          Mockup KDP
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-3 w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-white rounded-2xl cursor-pointer transition-all hover:bg-blue-50/30">
+                      <div className="flex flex-col items-center justify-center pt-3 pb-3">
+                        <Upload className="w-6 h-6 text-blue-500 mb-1" />
+                        <p className="text-xs font-semibold text-slate-700 text-center px-2">
+                          {coverFileName || "Clique para escolher uma imagem de capa"}
+                        </p>
+                        <p className="text-[10px] text-slate-400">PNG, JPG até 5MB</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {coverOption === "ai" && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/70 text-xs flex items-center gap-3">
+                  <Sparkles className="w-5 h-5 text-blue-600 shrink-0" />
+                  <p className="text-blue-900 leading-relaxed">
+                    Assim que o livro for criado, a IA processará a capa em alta resolução para a vitrine 3D.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

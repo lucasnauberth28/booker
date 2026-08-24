@@ -21,8 +21,8 @@ class GeminiImageService
         $modifiers = !empty($styleModifiers) ? ' Style modifiers: ' . implode(', ', $styleModifiers) : '';
         $fullPrompt = "Coloring book page for Amazon KDP, clean black and white line art, pure white background, no grayscale, no shading, thick clear outlines: " . $prompt . $modifiers;
 
-        // If a real API key is configured (not placeholder/empty), call the Google API
-        if (!empty($this->apiKey) && !str_starts_with($this->apiKey, 'your-')) {
+        // If a real API key is configured (not placeholder/empty) and not in test environment
+        if (!app()->environment('testing') && !empty($this->apiKey) && !str_starts_with($this->apiKey, 'your-')) {
             try {
                 // 1. Call Google Gemini 3.6 Flash for prompt reasoning and artistic enhancement
                 $geminiTextUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={$this->apiKey}";
@@ -98,6 +98,37 @@ class GeminiImageService
             }
         }
 
+        // Try FLUX AI engine for authentic, ultra-detailed Amazon KDP coloring pages
+        try {
+            $fluxPrompt = "Amazon KDP coloring book page, clean black and white line art, thick outlines, pure white background, no shading, no grayscale, coloring page for {$prompt}, 8k vector line art";
+            $fluxUrl = "https://image.pollinations.ai/prompt/" . urlencode($fluxPrompt) . "?width=1024&height=1365&model=flux&nologo=true&seed=" . rand(1000, 999999);
+            
+            $fluxResp = Http::timeout(25)->get($fluxUrl);
+            if ($fluxResp->successful() && strlen($fluxResp->body()) > 5000) {
+                \App\Models\TokenUsage::create([
+                    'book_id' => $bookId,
+                    'model' => 'flux-1-schnell-kdp',
+                    'operation_type' => 'image_generation',
+                    'prompt_tokens' => max(20, (int)(strlen($fullPrompt) / 4)),
+                    'candidates_tokens' => 1024,
+                    'total_tokens' => max(20, (int)(strlen($fullPrompt) / 4)) + 1024,
+                    'estimated_cost_usd' => 0.00000,
+                    'metadata' => [
+                        'engine' => 'flux-coloring-engine',
+                        'prompt' => $prompt,
+                    ],
+                ]);
+
+                return [
+                    'success' => true,
+                    'image_data' => base64_encode($fluxResp->body()),
+                    'mime_type' => 'image/png'
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::warning('FLUX AI image call failed: ' . $e->getMessage());
+        }
+
         // Generate local coloring page and track local simulation
         \App\Models\TokenUsage::create([
             'book_id' => $bookId,
@@ -118,6 +149,58 @@ class GeminiImageService
             'image_data' => base64_encode($imageData),
             'mime_type' => 'image/png'
         ];
+    }
+
+    /**
+     * Generates a vibrant, high-converting Amazon KDP book cover
+     */
+    public function generateCover(\App\Models\Book $book): array
+    {
+        $coverPromptText = "Vibrant award-winning Amazon KDP book cover illustration for a coloring book titled '{$book->titulo}' in the niche '{$book->nicho}', colorful, highly detailed, professional book cover art, no text";
+
+        if (!empty($this->apiKey) && !str_starts_with($this->apiKey, 'your-')) {
+            try {
+                $geminiTextUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={$this->apiKey}";
+                $textResponse = Http::withHeaders(['Content-Type' => 'application/json'])
+                    ->timeout(20)
+                    ->post($geminiTextUrl, [
+                        'contents' => [
+                            ['parts' => [['text' => "You are an Amazon KDP bestselling cover artist. Create a single descriptive image prompt for the front cover of a coloring book titled '{$book->titulo}' in the niche '{$book->nicho}'. Do not include text or letters on the image."]]]
+                        ]
+                    ]);
+
+                if ($textResponse->successful()) {
+                    $cand = $textResponse->json()['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                    if ($cand) {
+                        $coverPromptText = $cand;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('Gemini cover prompt refinement failed: ' . $e->getMessage());
+            }
+        }
+
+        try {
+            $fluxUrl = "https://image.pollinations.ai/prompt/" . urlencode($coverPromptText . ", ultra-detailed colorful Amazon KDP book cover") . "?width=1024&height=1365&model=flux&nologo=true&seed=" . rand(1000, 999999);
+            $fluxResp = Http::timeout(35)->get($fluxUrl);
+
+            if ($fluxResp->successful() && strlen($fluxResp->body()) > 5000) {
+                $r2Service = app(\App\Services\R2StorageService::class);
+                $coverPath = "books/{$book->id}/cover_" . time() . ".png";
+                $coverUrl = $r2Service->uploadImage(base64_encode($fluxResp->body()), $coverPath);
+
+                $book->update(['cover_image_url' => $coverUrl]);
+
+                return [
+                    'success' => true,
+                    'cover_url' => $coverUrl,
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Cover generation failed: ' . $e->getMessage());
+        }
+
+        return ['success' => false, 'message' => 'Falha ao gerar capa com IA.'];
     }
 
     /**

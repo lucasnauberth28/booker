@@ -35,8 +35,9 @@ import {
   Maximize2,
   CheckCheck,
   Loader2,
-  AlertCircle,
   BookOpen,
+  FileText,
+  Layers,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -70,7 +71,7 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
   const rejectedCount = imageList.filter((i) => i.status === "rejected").length
   const generatingCount = imageList.filter((i) => i.status === "generating" || i.status === "queued").length
 
-  // Keyboard navigation for carousel
+  // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!isOpen || viewMode !== "carousel" || imageList.length === 0) return
@@ -95,7 +96,7 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
       await api.images.updateStatus(id, status)
       mutate()
       onUpdated()
-      toast.success(status === "approved" ? "Página aprovada para o PDF!" : "Página rejeitada")
+      toast.success(status === "approved" ? "Página aprovada!" : "Página rejeitada")
     } catch {
       toast.error("Erro ao alterar status da imagem")
     }
@@ -107,7 +108,7 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
       await api.images.regenerate(image.id)
       mutate()
       onUpdated()
-      toast.success("Regeneração iniciada! A IA está processando uma nova versão.")
+      toast.success("Regeneração iniciada com novo traço de IA!")
     } catch (err: any) {
       toast.error(err.message || "Erro ao regenerar página")
     } finally {
@@ -158,25 +159,30 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden flex flex-col p-0 rounded-3xl border-slate-200 shadow-2xl bg-white animate-in fade-in-0 zoom-in-95 duration-200">
+        <DialogContent className="max-w-6xl max-h-[92vh] overflow-hidden flex flex-col p-0 rounded-3xl border-slate-200 shadow-2xl bg-white animate-in fade-in-0 zoom-in-95 duration-200">
           
           {/* Header Bar */}
-          <DialogHeader className="p-5 pb-3 border-b border-slate-100 bg-gradient-to-b from-blue-50/70 to-white flex flex-row items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <DialogTitle className="text-lg font-bold text-slate-900">
-                  Curadoria — {book.titulo}
-                </DialogTitle>
-                <Badge variant="secondary" className="text-[11px] font-bold bg-blue-100 text-blue-800">
-                  {book.setup?.nome}
-                </Badge>
+          <DialogHeader className="p-5 pb-3 border-b border-slate-100 bg-gradient-to-b from-blue-50/60 to-white flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+                <Layers className="h-5 w-5" />
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {approvedCount} Aprovadas • {rejectedCount} Rejeitadas • {generatingCount > 0 ? `${generatingCount} Gerando...` : `${imageList.length} Total`}
-              </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <DialogTitle className="text-lg font-bold text-slate-900">
+                    Curadoria Visual — {book.titulo}
+                  </DialogTitle>
+                  <Badge variant="secondary" className="text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">
+                    {book.setup?.nome} ({book.setup?.largura_polegadas}" × {book.setup?.altura_polegadas}")
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {approvedCount} Aprovadas • {rejectedCount} Rejeitadas • {generatingCount > 0 ? `${generatingCount} Processando IA...` : `${imageList.length} Páginas`}
+                </p>
+              </div>
             </div>
 
-            {/* View Mode Toggle & Bulk Actions */}
+            {/* View Mode Toggle */}
             <div className="flex items-center space-x-2">
               <Button
                 variant={viewMode === "carousel" ? "default" : "outline"}
@@ -185,7 +191,7 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
                 className="h-8 text-xs font-semibold rounded-xl"
               >
                 <Maximize2 className="w-3.5 h-3.5 mr-1" />
-                <span className="hidden sm:inline">Carrossel</span>
+                <span className="hidden sm:inline">Modo Foco</span>
               </Button>
 
               <Button
@@ -195,158 +201,191 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
                 className="h-8 text-xs font-semibold rounded-xl"
               >
                 <LayoutGrid className="w-3.5 h-3.5 mr-1" />
-                <span className="hidden sm:inline">Grade</span>
+                <span className="hidden sm:inline">Grade Geral</span>
               </Button>
             </div>
           </DialogHeader>
 
           {/* Body Content */}
-          <div className="flex-1 overflow-hidden flex flex-col bg-slate-50/50">
+          <div className="flex-1 overflow-hidden flex flex-col bg-slate-50/40">
             {imageList.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
                 <BookOpen className="w-12 h-12 text-slate-300 mb-3" />
                 <h4 className="text-base font-bold text-slate-700">Nenhuma página gerada ainda</h4>
                 <p className="text-xs text-slate-500 max-w-sm mt-1">
-                  Abra o painel lateral do livro e clique em "Gerar IA" para iniciar a criação das páginas de colorir.
+                  Abra o painel lateral do livro e clique em "Gerar IA" para iniciar a criação das ilustrações.
                 </p>
               </div>
             ) : viewMode === "carousel" && currentImage ? (
               
-              /* E-Commerce Focus Showcase Carousel */
-              <div className="flex-1 flex flex-col justify-between p-4 sm:p-6 overflow-hidden">
+              /* 2-Column Split-View: Left Hero Image + Right Dedicated Control Sidebar */
+              <div className="flex-1 flex flex-col overflow-hidden p-4 sm:p-5">
                 
-                {/* Top Carousel Navigation & Badge */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-black tracking-wide text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-xs">
-                    Página {safeIndex + 1} de {imageList.length}
-                  </span>
-
-                  <div className="flex items-center space-x-2">
-                    {currentImage.status === "approved" && (
-                      <Badge variant="success" className="text-xs font-bold px-2.5 py-1">
-                        <Check className="w-3.5 h-3.5 mr-1" /> Aprovada para o PDF
-                      </Badge>
-                    )}
-                    {currentImage.status === "rejected" && (
-                      <Badge variant="destructive" className="text-xs font-bold px-2.5 py-1">
-                        <X className="w-3.5 h-3.5 mr-1" /> Rejeitada
-                      </Badge>
-                    )}
-                    {(currentImage.status === "queued" || currentImage.status === "generating") && (
-                      <Badge variant="warning" className="text-xs font-bold px-2.5 py-1 animate-pulse">
-                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Gerando com IA...
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                {/* Central Focus Image Showcase */}
-                <div className="relative flex-1 flex items-center justify-center min-h-[300px] max-h-[52vh] my-auto">
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-hidden">
                   
-                  {/* Previous Button */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-                    disabled={safeIndex === 0}
-                    className="absolute left-2 sm:left-6 z-20 h-10 w-10 rounded-full bg-white/90 shadow-lg border-slate-200 hover:bg-white hover:scale-105 transition-all disabled:opacity-30"
-                  >
-                    <ChevronLeft className="w-5 h-5 text-slate-700" />
-                  </Button>
+                  {/* Left Column: Bounded Hero Image Canvas (8 cols) */}
+                  <div className="lg:col-span-8 bg-slate-100/70 border border-slate-200 rounded-2xl relative flex items-center justify-center p-4 overflow-hidden shadow-inner max-h-[56vh]">
+                    
+                    {/* Previous Button */}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+                      disabled={safeIndex === 0}
+                      className="absolute left-3 z-20 h-10 w-10 rounded-full bg-white/90 shadow-md border-slate-200 hover:bg-white hover:scale-105 transition-all disabled:opacity-20"
+                    >
+                      <ChevronLeft className="w-5 h-5 text-slate-700" />
+                    </Button>
 
-                  {/* Artwork Showcase Display */}
-                  <div className="relative h-full aspect-[3/4] bg-white rounded-2xl border-2 border-slate-200/90 shadow-xl overflow-hidden flex items-center justify-center p-2 group">
-                    <img
-                      src={getImageSrc(currentImage)}
-                      alt={`Página #${safeIndex + 1}`}
-                      className="w-full h-full object-contain rounded-xl select-none"
-                      onError={(e) => {
-                        // Fallback placeholder if image path fails
-                        (e.target as HTMLElement).style.display = "none"
-                      }}
-                    />
+                    {/* Image Display */}
+                    <div className="relative h-full max-h-[52vh] aspect-[3/4] flex items-center justify-center">
+                      <img
+                        src={getImageSrc(currentImage)}
+                        alt={`Página #${safeIndex + 1}`}
+                        className="max-h-full max-w-full object-contain rounded-xl bg-white shadow-xl border border-slate-300 select-none"
+                      />
 
-                    {/* Shimmer / Overlay for generating state */}
-                    {(currentImage.status === "generating" || regeneratingId === currentImage.id) && (
-                      <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center z-10">
-                        <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-2" />
-                        <span className="text-xs font-bold text-slate-800">Processando traços com IA...</span>
+                      {/* Top Page Tag */}
+                      <span className="absolute top-2 left-2 bg-slate-900/85 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
+                        Página #{safeIndex + 1}
+                      </span>
+
+                      {/* Shimmer / Overlay for generating state */}
+                      {(currentImage.status === "generating" || regeneratingId === currentImage.id) && (
+                        <div className="absolute inset-0 bg-white/85 backdrop-blur-xs flex flex-col items-center justify-center rounded-xl z-10">
+                          <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-2" />
+                          <span className="text-xs font-bold text-slate-800">Processando traço com IA...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Next Button */}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setCurrentIndex((prev) => Math.min(imageList.length - 1, prev + 1))}
+                      disabled={safeIndex === imageList.length - 1}
+                      className="absolute right-3 z-20 h-10 w-10 rounded-full bg-white/90 shadow-md border-slate-200 hover:bg-white hover:scale-105 transition-all disabled:opacity-20"
+                    >
+                      <ChevronRight className="w-5 h-5 text-slate-700" />
+                    </Button>
+
+                  </div>
+
+                  {/* Right Column: Dedicated Page Management Panel (4 cols) */}
+                  <div className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl p-5 flex flex-col justify-between shadow-xs overflow-y-auto">
+                    
+                    <div className="space-y-4">
+                      
+                      {/* Status Header */}
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                            Página Atual
+                          </span>
+                          <h4 className="text-base font-black text-slate-900">
+                            Página #{safeIndex + 1} de {imageList.length}
+                          </h4>
+                        </div>
+
+                        <div>
+                          {currentImage.status === "approved" && (
+                            <Badge variant="success" className="text-[11px] font-bold">
+                              ✓ Aprovada KDP
+                            </Badge>
+                          )}
+                          {currentImage.status === "rejected" && (
+                            <Badge variant="destructive" className="text-[11px] font-bold">
+                              ✕ Rejeitada
+                            </Badge>
+                          )}
+                          {(currentImage.status === "queued" || currentImage.status === "generating") && (
+                            <Badge variant="warning" className="text-[11px] font-bold animate-pulse">
+                              Gerando...
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                    )}
+
+                      {/* Prompt Details Card */}
+                      <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                          <FileText className="w-3 h-3 text-blue-600" />
+                          Prompt da Ilustração:
+                        </span>
+                        <p className="text-slate-700 italic leading-relaxed line-clamp-3">
+                          "{currentImage.prompt?.base_prompt || book.titulo}"
+                        </p>
+                      </div>
+
+                      {/* Validation Actions */}
+                      <div className="space-y-2 pt-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                          Ações de Validação:
+                        </span>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            onClick={() => handleStatus(currentImage.id, "approved")}
+                            variant={currentImage.status === "approved" ? "default" : "outline"}
+                            className={`h-11 rounded-xl font-bold text-xs shadow-xs transition-all ${
+                              currentImage.status === "approved"
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                            }`}
+                          >
+                            <Check className="w-4 h-4 mr-1.5" />
+                            <span>{currentImage.status === "approved" ? "Aprovada" : "Aprovar"}</span>
+                          </Button>
+
+                          <Button
+                            onClick={() => handleStatus(currentImage.id, "rejected")}
+                            variant={currentImage.status === "rejected" ? "default" : "outline"}
+                            className={`h-11 rounded-xl font-bold text-xs shadow-xs transition-all ${
+                              currentImage.status === "rejected"
+                                ? "bg-red-600 hover:bg-red-700 text-white"
+                                : "border-red-300 text-red-700 hover:bg-red-50"
+                            }`}
+                          >
+                            <X className="w-4 h-4 mr-1.5" />
+                            <span>{currentImage.status === "rejected" ? "Rejeitada" : "Rejeitar"}</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* AI Regeneration Action */}
+                      <div className="pt-2">
+                        <Button
+                          onClick={() => handleRegenerate(currentImage)}
+                          disabled={regeneratingId === currentImage.id || currentImage.status === "generating"}
+                          className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-sm shadow-blue-500/20 flex items-center justify-center space-x-1.5 transition-all"
+                        >
+                          <RotateCw className={`w-3.5 h-3.5 mr-1 ${regeneratingId === currentImage.id ? "animate-spin" : ""}`} />
+                          <span>Tentar Novamente (Regerar)</span>
+                        </Button>
+                      </div>
+
+                    </div>
+
+                    {/* Delete Page Action */}
+                    <div className="pt-4 mt-4 border-t border-slate-100">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setImageToDelete(currentImage)}
+                        className="w-full text-xs text-red-600 hover:bg-red-50 hover:text-red-700 font-bold h-9 rounded-xl justify-center"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                        <span>Remover esta Página</span>
+                      </Button>
+                    </div>
+
                   </div>
 
-                  {/* Next Button */}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentIndex((prev) => Math.min(imageList.length - 1, prev + 1))}
-                    disabled={safeIndex === imageList.length - 1}
-                    className="absolute right-2 sm:right-6 z-20 h-10 w-10 rounded-full bg-white/90 shadow-lg border-slate-200 hover:bg-white hover:scale-105 transition-all disabled:opacity-30"
-                  >
-                    <ChevronRight className="w-5 h-5 text-slate-700" />
-                  </Button>
                 </div>
 
-                {/* Primary Action Toolbar for Active Page */}
-                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 pt-3">
-                  
-                  {/* Approve Action */}
-                  <Button
-                    size="sm"
-                    onClick={() => handleStatus(currentImage.id, "approved")}
-                    variant={currentImage.status === "approved" ? "default" : "outline"}
-                    className={`h-10 px-4 rounded-xl text-xs font-bold shadow-xs transition-all ${
-                      currentImage.status === "approved"
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                        : "border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                    }`}
-                  >
-                    <Check className="w-4 h-4 mr-1.5" />
-                    <span>{currentImage.status === "approved" ? "Aprovada ✓" : "Aprovar"}</span>
-                  </Button>
-
-                  {/* Reject Action */}
-                  <Button
-                    size="sm"
-                    onClick={() => handleStatus(currentImage.id, "rejected")}
-                    variant={currentImage.status === "rejected" ? "default" : "outline"}
-                    className={`h-10 px-4 rounded-xl text-xs font-bold shadow-xs transition-all ${
-                      currentImage.status === "rejected"
-                        ? "bg-red-600 hover:bg-red-700 text-white"
-                        : "border-red-300 text-red-700 hover:bg-red-50"
-                    }`}
-                  >
-                    <X className="w-4 h-4 mr-1.5" />
-                    <span>{currentImage.status === "rejected" ? "Rejeitada ✕" : "Rejeitar"}</span>
-                  </Button>
-
-                  {/* Regenerate Action */}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleRegenerate(currentImage)}
-                    disabled={regeneratingId === currentImage.id || currentImage.status === "generating"}
-                    className="h-10 px-4 rounded-xl text-xs font-bold border-blue-200 text-blue-700 hover:bg-blue-50 shadow-xs transition-all"
-                  >
-                    <RotateCw className={`w-3.5 h-3.5 mr-1.5 ${regeneratingId === currentImage.id ? "animate-spin" : ""}`} />
-                    <span>Tentar Novamente (Regerar)</span>
-                  </Button>
-
-                  {/* Delete Action */}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setImageToDelete(currentImage)}
-                    className="h-10 px-3 rounded-xl text-xs font-bold text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                    title="Remover esta página do livro"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-
-                </div>
-
-                {/* E-Commerce Bottom Thumbnail Strip */}
-                <div className="pt-4 mt-2 border-t border-slate-200/70">
+                {/* Bottom Thumbnail Strip */}
+                <div className="pt-3 mt-3 border-t border-slate-200/80">
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
                     {imageList.map((img, idx) => {
                       const isSelected = idx === safeIndex
@@ -354,15 +393,15 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
                         <button
                           key={img.id}
                           onClick={() => setCurrentIndex(idx)}
-                          className={`relative shrink-0 w-12 h-16 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                          className={`relative shrink-0 w-11 h-14 rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
                             isSelected
-                              ? "border-blue-600 ring-2 ring-blue-500/30 scale-105 shadow-md"
+                              ? "border-blue-600 ring-2 ring-blue-500/40 scale-105 shadow-md"
                               : "border-slate-200 opacity-60 hover:opacity-100"
                           } ${
                             img.status === "approved"
-                              ? "ring-1 ring-emerald-500"
+                              ? "border-emerald-500"
                               : img.status === "rejected"
-                              ? "ring-1 ring-red-400"
+                              ? "border-red-400"
                               : ""
                           }`}
                         >
@@ -371,7 +410,7 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
                             alt={`Thumb ${idx + 1}`}
                             className="w-full h-full object-cover bg-white"
                           />
-                          <span className="absolute bottom-0 inset-x-0 bg-slate-900/80 text-white text-[9px] font-bold text-center leading-tight py-0.5">
+                          <span className="absolute bottom-0 inset-x-0 bg-slate-900/80 text-white text-[8px] font-bold text-center leading-tight py-0.5">
                             #{idx + 1}
                           </span>
                         </button>
@@ -383,13 +422,13 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
               </div>
             ) : (
               
-              /* Full Grid View with Quick Status Actions */
+              /* Full Grid View with Quick Actions */
               <div className="flex-1 overflow-y-auto p-6">
                 
                 {/* Bulk Actions Bar */}
                 <div className="flex items-center justify-between mb-4 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
                   <span className="text-xs font-bold text-slate-700">
-                    Ações Rápidas em Massa ({imageList.length} imagens):
+                    Ações em Massa ({imageList.length} páginas):
                   </span>
                   <div className="flex items-center space-x-2">
                     <Button

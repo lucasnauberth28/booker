@@ -16,6 +16,7 @@ export interface Book {
   nicho: string;
   total_paginas_desejadas: number;
   status: 'draft' | 'generating' | 'curating' | 'ready';
+  cover_image_url?: string | null;
   setup?: Setup;
   prompts?: Prompt[];
   images?: ImageRecord[];

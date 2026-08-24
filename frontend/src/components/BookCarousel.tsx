@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useEffect, useState } from "react"
 import { Book } from "@/types"
@@ -177,13 +177,21 @@ export function BookCarousel({
                     </div>
 
                     {/* Central Artwork Preview */}
-                    <div className="w-full max-w-[190px] aspect-square rounded-2xl bg-white shadow-md border border-slate-200 flex items-center justify-center p-3 relative z-10">
-                      <div className="w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-2">
-                        <BookOpen className="w-7 h-7 text-blue-500 mb-1 opacity-80" />
-                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest line-clamp-1">
-                          {book.nicho || "Coloring Book"}
-                        </span>
-                      </div>
+                    <div className="w-full max-w-[190px] aspect-square rounded-2xl bg-white shadow-md border border-slate-200 overflow-hidden flex items-center justify-center relative z-10">
+                      {book.cover_image_url ? (
+                        <img
+                          src={book.cover_image_url}
+                          alt={book.titulo}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-2 m-2">
+                          <BookOpen className="w-7 h-7 text-blue-500 mb-1 opacity-80" />
+                          <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest line-clamp-1">
+                            {book.nicho || "Coloring Book"}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Cover Title Area */}

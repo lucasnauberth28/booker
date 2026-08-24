@@ -21,6 +21,7 @@ Route::prefix('books/{book}')->group(function () {
     Route::get('images', [ImageController::class, 'index']);
     Route::post('images/reorder', [ImageController::class, 'reorder']);
     Route::post('generate', [GenerationController::class, 'generate']);
+    Route::post('generate-cover', [GenerationController::class, 'generateCover']);
     Route::post('compile', [CompilationController::class, 'compile']);
     Route::get('download-pdf', [CompilationController::class, 'download']);
     Route::get('usage', [UsageController::class, 'bookUsage']);

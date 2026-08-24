@@ -61,4 +61,19 @@ class GenerationController extends Controller
             'images_queued' => $imagesQueued
         ]);
     }
+
+    public function generateCover(Book $book, \App\Services\GeminiImageService $geminiService): JsonResponse
+    {
+        $result = $geminiService->generateCover($book);
+
+        if (!$result['success']) {
+            return response()->json(['message' => $result['message'] ?? 'Falha ao gerar capa'], 500);
+        }
+
+        return response()->json([
+            'message' => 'Capa gerada com sucesso!',
+            'cover_image_url' => $result['cover_url'],
+            'book' => $book->fresh(),
+        ]);
+    }
 }

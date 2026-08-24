@@ -29,6 +29,7 @@ export const api = {
     update: (id: number, data: Partial<Book>) => fetchApi<Book>(`/books/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: number) => fetchApi<void>(`/books/${id}`, { method: 'DELETE' }),
     generate: (id: number) => fetchApi<{ message: string; total_images: number }>(`/books/${id}/generate`, { method: 'POST' }),
+    generateCover: (id: number) => fetchApi<{ message: string; cover_image_url: string; book: Book }>(`/books/${id}/generate-cover`, { method: 'POST' }),
     compile: (id: number) => fetchApi<{ pdf_url: string }>(`/books/${id}/compile`, { method: 'POST' }),
   },
   prompts: {

@@ -66,6 +66,7 @@ export function BookManagementSheet({
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [generatingCover, setGeneratingCover] = useState(false)
   const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null)
 
   const { data: bookUsage } = useSWR<{
@@ -84,6 +85,20 @@ export function BookManagementSheet({
   const progressPercent = Math.min(100, Math.round((approved / total) * 100))
   const isGenerating = book.status === "generating" || generating
   const hasPrompts = prompts.length > 0
+
+  const handleGenerateCover = async () => {
+    setGeneratingCover(true)
+    toast.info("A IA está criando uma capa colorida para este livro...")
+    try {
+      await api.books.generateCover(book.id)
+      toast.success("Capa gerada com sucesso pela IA!")
+      onRefresh()
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar capa")
+    } finally {
+      setGeneratingCover(false)
+    }
+  }
 
   const handleConfirmGenerate = async () => {
     setShowGenerateConfirm(false)
@@ -240,7 +255,52 @@ export function BookManagementSheet({
               )}
             </Button>
 
-            {/* 3. AI Generation Trigger */}
+            {/* 3. Book Cover Artwork Section */}
+            <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center justify-between gap-4">
+              <div className="flex items-center space-x-3 min-w-0">
+                <div className="w-12 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                  {book.cover_image_url ? (
+                    <img
+                      src={book.cover_image_url}
+                      alt="Capa"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <BookOpen className="w-5 h-5 text-slate-400" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-slate-900">
+                    Capa do Livro {book.cover_image_url ? "✓ Pronta" : "(Sem Capa)"}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 truncate">
+                    {book.cover_image_url ? "Capa colorida exclusiva KDP" : "Gere uma capa vibrante com IA"}
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleGenerateCover}
+                disabled={generatingCover}
+                className="h-8 text-xs font-bold text-blue-700 border-blue-200 hover:bg-blue-50 rounded-xl shrink-0"
+              >
+                {generatingCover ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1 text-blue-600" />
+                    <span>Criando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                    <span>{book.cover_image_url ? "Regerar Capa" : "Gerar Capa com IA"}</span>
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* 4. AI Generation Trigger */}
             <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-200/60 flex items-center justify-between gap-4">
               <div>
                 <h4 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
