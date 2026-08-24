@@ -18,24 +18,29 @@ class GeminiImageService
 
     public function generateImage(string $prompt, array $styleModifiers = [], ?int $bookId = null): array
     {
-        $modifiers = !empty($styleModifiers) ? ' Style modifiers: ' . implode(', ', $styleModifiers) : '';
-        $fullPrompt = "Coloring book page for Amazon KDP, clean black and white line art, pure white background, no grayscale, no shading, thick clear outlines: " . $prompt . $modifiers;
+        $enhancedPrompt = $prompt;
+        $fullPrompt = "Cute simple 2D children coloring book page, bold thick black outlines, pure white background, no shading, no grayscale: " . $prompt;
 
         // If a real API key is configured (not placeholder/empty) and not in test environment
         if (!app()->environment('testing') && !empty($this->apiKey) && !str_starts_with($this->apiKey, 'your-')) {
             try {
-                // 1. Call Google Gemini 3.6 Flash for prompt reasoning and artistic enhancement
+                // 1. Call Google Gemini 3.6 Flash to craft a cute, child-friendly 2D cartoon scene prompt
                 $geminiTextUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={$this->apiKey}";
                 $textResponse = Http::withHeaders(['Content-Type' => 'application/json'])
-                    ->timeout(30)
+                    ->timeout(20)
                     ->post($geminiTextUrl, [
                         'contents' => [
-                            ['parts' => [['text' => "You are an expert Amazon KDP coloring book art director. Refine this prompt into a single ultra-detailed line art description: {$fullPrompt}"]]]
+                            ['parts' => [['text' => "You are an expert Amazon KDP Coloring Book Art Director specializing in children's books (ages 3-8). Refine this subject into a 1-sentence prompt for a super cute, smiling, friendly cartoon baby animal or character: '{$prompt}'. Rules: Must be simple 2D cartoon line art with thick outlines, empty white interiors to color, zero shading, zero 3D, zero grayscale. Return ONLY the refined English prompt."]]]
                         ]
                     ]);
 
                 if ($textResponse->successful()) {
                     $textData = $textResponse->json();
+                    $refinedText = $textData['candidates'][0]['content']['parts'][0]['text'] ?? null;
+                    if (!empty($refinedText)) {
+                        $enhancedPrompt = trim($refinedText, " \t\n\r\0\x0B\"'");
+                    }
+
                     $usage = $textData['usageMetadata'] ?? [];
                     $promptTokens = $usage['promptTokenCount'] ?? max(15, (int)(strlen($fullPrompt) / 4));
                     $candidatesTokens = $usage['candidatesTokenCount'] ?? 80;
@@ -50,78 +55,42 @@ class GeminiImageService
                         'total_tokens' => $totalTokens,
                         'estimated_cost_usd' => ($totalTokens / 1000000) * 0.15,
                         'metadata' => [
-                            'prompt_snippet' => substr($prompt, 0, 100),
+                            'prompt_snippet' => substr($enhancedPrompt, 0, 100),
                             'gemini_api_status' => 200,
                         ],
                     ]);
                 }
-
-                // 2. Try Gemini 3.1 Flash Image model
-                $geminiImageUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key={$this->apiKey}";
-                $imgResponse = Http::withHeaders(['Content-Type' => 'application/json'])
-                    ->timeout(60)
-                    ->post($geminiImageUrl, [
-                        'contents' => [
-                            ['parts' => [['text' => $fullPrompt]]]
-                        ]
-                    ]);
-
-                if ($imgResponse->successful()) {
-                    $imgData = $imgResponse->json();
-                    $candidates = $imgData['candidates'] ?? [];
-                    foreach ($candidates as $cand) {
-                        $parts = $cand['content']['parts'] ?? [];
-                        foreach ($parts as $part) {
-                            if (isset($part['inlineData']['data'])) {
-                                \App\Models\TokenUsage::create([
-                                    'book_id' => $bookId,
-                                    'model' => 'gemini-3.1-flash-image',
-                                    'operation_type' => 'image_generation',
-                                    'prompt_tokens' => 120,
-                                    'candidates_tokens' => 1024,
-                                    'total_tokens' => 1144,
-                                    'estimated_cost_usd' => 0.03000,
-                                    'metadata' => ['mode' => 'gemini_image'],
-                                ]);
-
-                                return [
-                                    'success' => true,
-                                    'image_data' => $part['inlineData']['data'],
-                                    'mime_type' => $part['inlineData']['mimeType'] ?? 'image/png'
-                                ];
-                            }
-                        }
-                    }
-                }
             } catch (\Exception $e) {
-                Log::warning('Gemini API call warning: ' . $e->getMessage());
+                Log::warning('Gemini prompt enhancement warning: ' . $e->getMessage());
             }
         }
 
-        // Try FLUX AI engine for authentic, ultra-detailed Amazon KDP coloring pages
+        // Try FLUX AI engine for authentic, kid-friendly 2D Amazon KDP coloring pages
         try {
-            $fluxPrompt = "Amazon KDP coloring book page, clean black and white line art, thick outlines, pure white background, no shading, no grayscale, coloring page for {$prompt}, 8k vector line art";
+            $fluxPrompt = "simple 2d coloring page for toddlers and kids, cute cartoon {$enhancedPrompt}, bold thick black line art, pure solid white background, completely empty white interior shapes ready for coloring, zero shading, zero grayscale, zero 3d rendering, flat vector outline, children coloring book style, high contrast, clean outlines";
             $fluxUrl = "https://image.pollinations.ai/prompt/" . urlencode($fluxPrompt) . "?width=1024&height=1365&model=flux&nologo=true&seed=" . rand(1000, 999999);
             
-            $fluxResp = Http::timeout(25)->get($fluxUrl);
+            $fluxResp = Http::timeout(30)->get($fluxUrl);
             if ($fluxResp->successful() && strlen($fluxResp->body()) > 5000) {
+                $processedImage = $this->processKdpColoringPage($fluxResp->body());
+
                 \App\Models\TokenUsage::create([
                     'book_id' => $bookId,
                     'model' => 'flux-1-schnell-kdp',
                     'operation_type' => 'image_generation',
-                    'prompt_tokens' => max(20, (int)(strlen($fullPrompt) / 4)),
+                    'prompt_tokens' => max(20, (int)(strlen($fluxPrompt) / 4)),
                     'candidates_tokens' => 1024,
-                    'total_tokens' => max(20, (int)(strlen($fullPrompt) / 4)) + 1024,
+                    'total_tokens' => max(20, (int)(strlen($fluxPrompt) / 4)) + 1024,
                     'estimated_cost_usd' => 0.00000,
                     'metadata' => [
-                        'engine' => 'flux-coloring-engine',
-                        'prompt' => $prompt,
+                        'engine' => 'flux-kids-coloring-engine',
+                        'prompt' => $enhancedPrompt,
                     ],
                 ]);
 
                 return [
                     'success' => true,
-                    'image_data' => base64_encode($fluxResp->body()),
+                    'image_data' => base64_encode($processedImage),
                     'mime_type' => 'image/png'
                 ];
             }
@@ -142,13 +111,58 @@ class GeminiImageService
         ]);
 
         // Generate a crisp, valid coloring book page PNG locally via GD
-        $imageData = $this->createColoringPagePng($prompt);
+        $imageData = $this->createColoringPagePng($enhancedPrompt);
 
         return [
             'success' => true,
             'image_data' => base64_encode($imageData),
             'mime_type' => 'image/png'
         ];
+    }
+
+    /**
+     * Post-processes coloring page: scales inside KDP margins, draws border frame, and binarizes lines
+     */
+    protected function processKdpColoringPage(string $rawBinary): string
+    {
+        $src = @imagecreatefromstring($rawBinary);
+        if (!$src) {
+            return $rawBinary;
+        }
+
+        $width = imagesx($src);
+        $height = imagesy($src);
+
+        $targetW = 1024;
+        $targetH = 1365;
+        $canvas = imagecreatetruecolor($targetW, $targetH);
+
+        $white = imagecolorallocate($canvas, 255, 255, 255);
+        $black = imagecolorallocate($canvas, 10, 10, 10);
+        imagefill($canvas, 0, 0, $white);
+
+        // Safe margin of 70px inside the page
+        $margin = 70;
+        $innerW = $targetW - ($margin * 2);
+        $innerH = $targetH - ($margin * 2);
+
+        imagecopyresampled($canvas, $src, $margin, $margin, 0, 0, $innerW, $innerH, $width, $height);
+        imagedestroy($src);
+
+        // Draw elegant Amazon KDP outer page frame
+        imagesetthickness($canvas, 6);
+        imagerectangle($canvas, 45, 45, $targetW - 45, $targetH - 45, $black);
+
+        // Apply grayscale and high contrast to ensure clean black line art on pure white paper
+        imagefilter($canvas, IMG_FILTER_CONTRAST, -35);
+        imagefilter($canvas, IMG_FILTER_GRAYSCALE);
+
+        ob_start();
+        imagepng($canvas);
+        $processed = ob_get_clean();
+        imagedestroy($canvas);
+
+        return $processed;
     }
 
     /**
