@@ -25,6 +25,11 @@ class R2StorageService
             // Cloudflare R2 does not support object ACLs, so do not pass 'public' visibility flag
             Storage::disk($disk)->put($path, $decodedData);
             
+            if ($disk === 'public') {
+                $baseUrl = rtrim(config('app.url', 'http://localhost:8000'), '/');
+                return "{$baseUrl}/storage/{$path}";
+            }
+
             return Storage::disk($disk)->url($path);
         } catch (\Exception $e) {
             Log::error('Storage Upload Error: ' . $e->getMessage());
@@ -47,6 +52,10 @@ class R2StorageService
     {
         try {
             $disk = $this->getDiskName();
+            if ($disk === 'public') {
+                $baseUrl = rtrim(config('app.url', 'http://localhost:8000'), '/');
+                return "{$baseUrl}/storage/{$path}";
+            }
             return Storage::disk($disk)->url($path);
         } catch (\Exception $e) {
             Log::error('Storage GetUrl Error: ' . $e->getMessage());

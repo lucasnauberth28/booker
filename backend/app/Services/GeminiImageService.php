@@ -24,84 +24,66 @@ class GeminiImageService
         // If a real API key is configured (not placeholder/empty), call the Google API
         if (!empty($this->apiKey) && !str_starts_with($this->apiKey, 'your-')) {
             try {
-                // Try Imagen 3 endpoint first
-                $imagenUrl = "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={$this->apiKey}";
-                $response = Http::withHeaders(['Content-Type' => 'application/json'])
-                    ->timeout(60)
-                    ->post($imagenUrl, [
-                        'instances' => [
-                            ['prompt' => $fullPrompt]
-                        ],
-                        'parameters' => [
-                            'sampleCount' => 1,
-                            'aspectRatio' => '3:4',
-                            'outputOptions' => ['mimeType' => 'image/png']
-                        ]
-                    ]);
-
-                if ($response->successful()) {
-                    $data = $response->json();
-                    $b64 = $data['predictions'][0]['bytesBase64Encoded'] ?? null;
-                    if ($b64) {
-                        // Record Token Usage for Imagen 3
-                        $promptTokenCount = max(10, (int)(strlen($fullPrompt) / 4));
-                        \App\Models\TokenUsage::create([
-                            'book_id' => $bookId,
-                            'model' => 'imagen-3.0-generate-002',
-                            'operation_type' => 'image_generation',
-                            'prompt_tokens' => $promptTokenCount,
-                            'candidates_tokens' => 1024,
-                            'total_tokens' => $promptTokenCount + 1024,
-                            'estimated_cost_usd' => 0.03000,
-                            'metadata' => [
-                                'prompt_snippet' => substr($prompt, 0, 100),
-                                'api_response_status' => 200,
-                            ],
-                        ]);
-
-                        return [
-                            'success' => true,
-                            'image_data' => $b64,
-                            'mime_type' => 'image/png'
-                        ];
-                    }
-                }
-
-                // Fallback to Gemini 2.0 generateContent endpoint if Imagen is unavailable
-                $geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$this->apiKey}";
-                $response2 = Http::withHeaders(['Content-Type' => 'application/json'])
-                    ->timeout(60)
-                    ->post($geminiUrl, [
+                // 1. Call Google Gemini 3.6 Flash for prompt reasoning and artistic enhancement
+                $geminiTextUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={$this->apiKey}";
+                $textResponse = Http::withHeaders(['Content-Type' => 'application/json'])
+                    ->timeout(30)
+                    ->post($geminiTextUrl, [
                         'contents' => [
-                            ['parts' => [['text' => $fullPrompt]]]
+                            ['parts' => [['text' => "You are an expert Amazon KDP coloring book art director. Refine this prompt into a single ultra-detailed line art description: {$fullPrompt}"]]]
                         ]
                     ]);
 
-                if ($response2->successful()) {
-                    $data = $response2->json();
-                    $usage = $data['usageMetadata'] ?? [];
-                    $promptTokens = $usage['promptTokenCount'] ?? max(10, (int)(strlen($fullPrompt) / 4));
-                    $candidatesTokens = $usage['candidatesTokenCount'] ?? 250;
+                if ($textResponse->successful()) {
+                    $textData = $textResponse->json();
+                    $usage = $textData['usageMetadata'] ?? [];
+                    $promptTokens = $usage['promptTokenCount'] ?? max(15, (int)(strlen($fullPrompt) / 4));
+                    $candidatesTokens = $usage['candidatesTokenCount'] ?? 80;
                     $totalTokens = $usage['totalTokenCount'] ?? ($promptTokens + $candidatesTokens);
 
                     \App\Models\TokenUsage::create([
                         'book_id' => $bookId,
-                        'model' => 'gemini-2.0-flash',
-                        'operation_type' => 'image_generation',
+                        'model' => 'gemini-3.6-flash',
+                        'operation_type' => 'prompt_enhancement',
                         'prompt_tokens' => $promptTokens,
                         'candidates_tokens' => $candidatesTokens,
                         'total_tokens' => $totalTokens,
                         'estimated_cost_usd' => ($totalTokens / 1000000) * 0.15,
                         'metadata' => [
                             'prompt_snippet' => substr($prompt, 0, 100),
+                            'gemini_api_status' => 200,
                         ],
                     ]);
+                }
 
-                    $candidates = $data['candidates'] ?? [];
+                // 2. Try Gemini 3.1 Flash Image model
+                $geminiImageUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key={$this->apiKey}";
+                $imgResponse = Http::withHeaders(['Content-Type' => 'application/json'])
+                    ->timeout(60)
+                    ->post($geminiImageUrl, [
+                        'contents' => [
+                            ['parts' => [['text' => $fullPrompt]]]
+                        ]
+                    ]);
+
+                if ($imgResponse->successful()) {
+                    $imgData = $imgResponse->json();
+                    $candidates = $imgData['candidates'] ?? [];
                     foreach ($candidates as $cand) {
                         $parts = $cand['content']['parts'] ?? [];
                         foreach ($parts as $part) {
                             if (isset($part['inlineData']['data'])) {
+                                \App\Models\TokenUsage::create([
+                                    'book_id' => $bookId,
+                                    'model' => 'gemini-3.1-flash-image',
+                                    'operation_type' => 'image_generation',
+                                    'prompt_tokens' => 120,
+                                    'candidates_tokens' => 1024,
+                                    'total_tokens' => 1144,
+                                    'estimated_cost_usd' => 0.03000,
+                                    'metadata' => ['mode' => 'gemini_image'],
+                                ]);
+
                                 return [
                                     'success' => true,
                                     'image_data' => $part['inlineData']['data'],
@@ -112,7 +94,7 @@ class GeminiImageService
                     }
                 }
             } catch (\Exception $e) {
-                Log::warning('Gemini API call failed, generating procedural coloring page fallback: ' . $e->getMessage());
+                Log::warning('Gemini API call warning: ' . $e->getMessage());
             }
         }
 
@@ -237,7 +219,7 @@ class GeminiImageService
 
         try {
             // Lightweight model query to test key
-            $testUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash?key={$this->apiKey}";
+            $testUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash?key={$this->apiKey}";
             $response = Http::timeout(10)->get($testUrl);
 
             if ($response->successful()) {
