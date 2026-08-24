@@ -66,14 +66,14 @@ export function BookManagementSheet({
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false)
   const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null)
 
-  if (!book) return null
-
   const { data: bookUsage } = useSWR<{
     total_tokens: number;
     total_requests: number;
     estimated_cost_usd: number;
     estimated_cost_brl: number;
   }>(book && isOpen ? `/books/${book.id}/usage` : null, fetcher)
+
+  if (!book) return null
 
   const approved = book.images_count?.approved || 0
   const rejected = book.images_count?.rejected || 0
