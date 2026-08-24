@@ -116,7 +116,7 @@ class GeminiImageService
     }
 
     /**
-     * Post-processes coloring page: scales cleanly inside KDP safe margins and draws neat outer frame
+     * Post-processes coloring page: extracts crisp black line art on pure white paper via Color Dodge and frames for KDP
      */
     protected function processKdpColoringPage(string $rawBinary): string
     {
@@ -125,33 +125,75 @@ class GeminiImageService
             return $rawBinary;
         }
 
-        $width = imagesx($src);
-        $height = imagesy($src);
+        $origW = imagesx($src);
+        $origH = imagesy($src);
 
         $targetW = 1024;
         $targetH = 1024;
-        $canvas = imagecreatetruecolor($targetW, $targetH);
 
-        $white = imagecolorallocate($canvas, 255, 255, 255);
-        $black = imagecolorallocate($canvas, 0, 0, 0);
-        imagefill($canvas, 0, 0, $white);
+        // Rescale smoothly onto target canvas with safe margin
+        $scaled = imagecreatetruecolor($targetW, $targetH);
+        $white = imagecolorallocate($scaled, 255, 255, 255);
+        imagefill($scaled, 0, 0, $white);
 
-        // Safe margin of 50px inside the page
         $margin = 50;
         $innerW = $targetW - ($margin * 2);
         $innerH = $targetH - ($margin * 2);
-
-        imagecopyresampled($canvas, $src, $margin, $margin, 0, 0, $innerW, $innerH, $width, $height);
+        imagecopyresampled($scaled, $src, $margin, $margin, 0, 0, $innerW, $innerH, $origW, $origH);
         imagedestroy($src);
 
-        // Draw elegant Amazon KDP outer page frame
-        imagesetthickness($canvas, 5);
-        imagerectangle($canvas, 35, 35, $targetW - 35, $targetH - 35, $black);
+        // Convert to grayscale
+        imagefilter($scaled, IMG_FILTER_GRAYSCALE);
+
+        // Create blurred inverted copy for line art extraction
+        $inv = imagecreatetruecolor($targetW, $targetH);
+        imagecopy($inv, $scaled, 0, 0, 0, 0, $targetW, $targetH);
+        imagefilter($inv, IMG_FILTER_NEGATE);
+
+        // Gaussian blur passes
+        for ($i = 0; $i < 6; $i++) {
+            imagefilter($inv, IMG_FILTER_GAUSSIAN_BLUR);
+        }
+
+        // Color Dodge blend to produce crisp black line contours on 100% white paper
+        $lineArtCanvas = imagecreatetruecolor($targetW, $targetH);
+        imagefill($lineArtCanvas, 0, 0, $white);
+
+        for ($x = 0; $x < $targetW; $x++) {
+            for ($y = 0; $y < $targetH; $y++) {
+                $origVal = imagecolorat($scaled, $x, $y) & 0xFF;
+                $invVal = imagecolorat($inv, $x, $y) & 0xFF;
+
+                if ($invVal == 255) {
+                    $dodge = 255;
+                } else {
+                    $dodge = min(255, (int)(($origVal * 256) / (255 - $invVal)));
+                }
+
+                // Crisp contrast: clean white paper (> 205) vs solid black ink outline (<= 205)
+                if ($dodge > 205) {
+                    $finalVal = 255;
+                } else {
+                    $finalVal = max(0, (int)($dodge * 0.65));
+                }
+
+                $pixelColor = imagecolorallocate($lineArtCanvas, $finalVal, $finalVal, $finalVal);
+                imagesetpixel($lineArtCanvas, $x, $y, $pixelColor);
+            }
+        }
+
+        imagedestroy($scaled);
+        imagedestroy($inv);
+
+        // Draw Amazon KDP clean outer rectangular border
+        $black = imagecolorallocate($lineArtCanvas, 0, 0, 0);
+        imagesetthickness($lineArtCanvas, 5);
+        imagerectangle($lineArtCanvas, 35, 35, $targetW - 35, $targetH - 35, $black);
 
         ob_start();
-        imagepng($canvas);
+        imagepng($lineArtCanvas);
         $processed = ob_get_clean();
-        imagedestroy($canvas);
+        imagedestroy($lineArtCanvas);
 
         return $processed;
     }
