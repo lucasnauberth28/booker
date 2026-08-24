@@ -33,6 +33,20 @@ class Image extends Model
         return $this->belongsTo(Prompt::class);
     }
 
+    public function getR2FileUrlAttribute(?string $value): ?string
+    {
+        if (empty($value)) {
+            return null;
+        }
+        if (str_starts_with($value, 'http://localhost/storage/')) {
+            return str_replace('http://localhost/storage/', 'http://localhost:8000/storage/', $value);
+        }
+        if (str_starts_with($value, '/storage/')) {
+            return 'http://localhost:8000' . $value;
+        }
+        return $value;
+    }
+
     public function scopeApproved($query)
     {
         return $query->where('status', 'approved');

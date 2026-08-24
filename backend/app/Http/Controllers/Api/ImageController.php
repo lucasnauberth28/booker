@@ -46,4 +46,31 @@ class ImageController extends Controller
 
         return response()->json(['message' => 'Images reordered successfully']);
     }
+
+    public function regenerate(Image $image): JsonResponse
+    {
+        $image->update([
+            'status' => 'generating',
+        ]);
+
+        \App\Jobs\GenerateImageFromAi::dispatch($image);
+
+        return response()->json([
+            'message' => 'Regeneração iniciada para esta página.',
+            'image' => $image->fresh(),
+        ]);
+    }
+
+    public function destroy(Image $image): JsonResponse
+    {
+        if ($image->r2_file_url) {
+            $parsedPath = parse_url($image->r2_file_url, PHP_URL_PATH);
+            $storagePath = str_replace('/storage/', '', $parsedPath);
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($storagePath);
+        }
+
+        $image->delete();
+
+        return response()->json(['message' => 'Página removida com sucesso.']);
+    }
 }

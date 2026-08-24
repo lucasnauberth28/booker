@@ -41,6 +41,8 @@ export const api = {
     listByBook: (bookId: number) => fetchApi<ImageRecord[]>(`/books/${bookId}/images`),
     updateStatus: (id: number, status: 'approved' | 'rejected') => fetchApi<ImageRecord>(`/images/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     reorder: (bookId: number, images: { id: number; page_order: number }[]) => fetchApi<void>(`/books/${bookId}/images/reorder`, { method: 'POST', body: JSON.stringify({ images }) }),
+    regenerate: (id: number) => fetchApi<{ message: string; image: ImageRecord }>(`/images/${id}/regenerate`, { method: 'POST' }),
+    delete: (id: number) => fetchApi<{ message: string }>(`/images/${id}`, { method: 'DELETE' }),
   },
   usage: {
     summary: () => fetchApi<any>('/usage/summary'),

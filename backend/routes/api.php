@@ -26,8 +26,10 @@ Route::prefix('books/{book}')->group(function () {
     Route::get('usage', [UsageController::class, 'bookUsage']);
 });
 
-// Image status update (standalone)
+// Image actions (standalone)
 Route::patch('images/{image}/status', [ImageController::class, 'updateStatus']);
+Route::post('images/{image}/regenerate', [ImageController::class, 'regenerate']);
+Route::delete('images/{image}', [ImageController::class, 'destroy']);
 
 // Token & Quota Usage
 Route::get('usage/summary', [UsageController::class, 'summary']);
