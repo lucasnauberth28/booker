@@ -64,6 +64,8 @@ export function BookManagementSheet({
   const [compiling, setCompiling] = useState(false)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
   const [showGenerateConfirm, setShowGenerateConfirm] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null)
 
   const { data: bookUsage } = useSWR<{
@@ -94,6 +96,21 @@ export function BookManagementSheet({
       toast.error(err.message || "Erro ao iniciar geração")
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const handleConfirmDeleteBook = async () => {
+    setDeleting(true)
+    try {
+      await api.books.delete(book.id)
+      toast.success(`Livro "${book.titulo}" e seus arquivos foram excluídos com sucesso.`)
+      setShowDeleteConfirm(false)
+      onClose()
+      onRefresh()
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao excluir livro")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -138,18 +155,30 @@ export function BookManagementSheet({
           
           {/* Sheet Header Banner */}
           <div className="p-6 bg-gradient-to-b from-blue-50/80 to-white border-b border-slate-100">
-            <div className="flex items-center space-x-3 mb-3">
-              <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
-                <BookOpen className="h-5 w-5" />
+            <div className="flex items-center justify-between space-x-3 mb-3">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
+                <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px] font-bold uppercase mb-1">
+                    {book.nicho}
+                  </Badge>
+                  <SheetTitle className="text-xl font-black text-slate-900 truncate">
+                    {book.titulo}
+                  </SheetTitle>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px] font-bold uppercase mb-1">
-                  {book.nicho}
-                </Badge>
-                <SheetTitle className="text-xl font-black text-slate-900 truncate">
-                  {book.titulo}
-                </SheetTitle>
-              </div>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg shrink-0 transition-colors"
+                title="Excluir este Livro"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
 
             {/* KDP Specifications Tag */}
@@ -338,10 +367,58 @@ export function BookManagementSheet({
               )}
             </div>
 
+            {/* 6. Danger Zone / Delete Project */}
+            <div className="pt-4 border-t border-slate-100">
+              <div className="p-4 rounded-2xl bg-red-50/50 border border-red-100 flex items-center justify-between">
+                <div>
+                  <h5 className="text-xs font-bold text-red-950">Excluir Projeto</h5>
+                  <p className="text-[11px] text-red-700/80">
+                    Apaga permanentemente o livro, prompts, imagens e PDF.
+                  </p>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleting}
+                  className="h-8 border-red-200 text-red-700 hover:bg-red-600 hover:text-white text-xs font-bold rounded-xl transition-all"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  <span>Excluir</span>
+                </Button>
+              </div>
+            </div>
+
           </div>
 
         </SheetContent>
       </Sheet>
+
+      {/* Confirmation AlertDialog for Book Deletion */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              Excluir este projeto permanentemente?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O livro <strong>"{book.titulo}"</strong>, todas as suas <strong>{book.images_count?.total || 0} imagens geradas</strong>, prompts e o arquivo PDF compilado serão permanentemente removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteBook}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {deleting ? "Excluindo..." : "Sim, Excluir Projeto"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmation AlertDialog for AI Generation */}
       <AlertDialog open={showGenerateConfirm} onOpenChange={setShowGenerateConfirm}>

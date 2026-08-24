@@ -88,7 +88,23 @@ class BookController extends Controller
 
     public function destroy(Book $book): JsonResponse
     {
+        // Delete all generated images and prompts
+        $book->images()->delete();
+        $book->prompts()->delete();
+
+        // Remove files from storage
+        try {
+            \Illuminate\Support\Facades\Storage::disk('public')->deleteDirectory("books/{$book->id}");
+            
+            $r2Key = config('filesystems.disks.r2.key');
+            if (!empty($r2Key) && !str_starts_with($r2Key, 'your-')) {
+                \Illuminate\Support\Facades\Storage::disk('r2')->deleteDirectory("books/{$book->id}");
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning("Failed to clean storage directory for book {$book->id}: " . $e->getMessage());
+        }
+
         $book->delete();
-        return response()->json(null, 204);
+        return response()->json(['message' => 'Livro excluído com sucesso'], 200);
     }
 }
