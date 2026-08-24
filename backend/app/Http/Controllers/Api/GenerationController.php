@@ -62,9 +62,9 @@ class GenerationController extends Controller
         ]);
     }
 
-    public function generateCover(Book $book, \App\Services\GeminiImageService $geminiService): JsonResponse
+    public function generateCover(Book $book, \App\Services\RecraftImageService $recraftService): JsonResponse
     {
-        $result = $geminiService->generateCover($book);
+        $result = $recraftService->generateCover($book);
 
         if (!$result['success']) {
             return response()->json(['message' => $result['message'] ?? 'Falha ao gerar capa'], 500);

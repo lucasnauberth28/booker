@@ -29,7 +29,7 @@ class GenerateImageFromAi implements ShouldQueue
         $this->image = $image;
     }
 
-    public function handle(GeminiImageService $geminiService, R2StorageService $r2Service): void
+    public function handle(\App\Services\RecraftImageService $recraftService, R2StorageService $r2Service): void
     {
         $this->image->update(['status' => 'generating']);
         
@@ -39,7 +39,7 @@ class GenerateImageFromAi implements ShouldQueue
         $promptText = $promptModel->base_prompt;
         $styleModifiers = $promptModel->style_modifiers ?? [];
         
-        $response = $geminiService->generateImage($promptText, $styleModifiers, $this->image->book_id);
+        $response = $recraftService->generateImage($promptText, $styleModifiers, $this->image->book_id);
         
         if ($response['success']) {
             $path = "books/{$this->image->book_id}/images/{$this->image->id}_" . time() . ".png";
