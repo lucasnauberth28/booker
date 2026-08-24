@@ -19,18 +19,19 @@ class GeminiImageService
     public function generateImage(string $prompt, array $styleModifiers = [], ?int $bookId = null): array
     {
         $enhancedPrompt = $prompt;
-        $fullPrompt = "Cute simple 2D children coloring book page, bold thick black outlines, pure white background, no shading, no grayscale: " . $prompt;
+        $modifiersStr = !empty($styleModifiers) ? ', ' . implode(', ', $styleModifiers) : '';
+        $fullPrompt = "Coloring book page, {$prompt}{$modifiersStr}, clean bold black line art, pure white background, no shading, no black fill";
 
         // If a real API key is configured (not placeholder/empty) and not in test environment
         if (!app()->environment('testing') && !empty($this->apiKey) && !str_starts_with($this->apiKey, 'your-')) {
             try {
-                // 1. Call Google Gemini 3.6 Flash to craft a cute, child-friendly 2D cartoon scene prompt
+                // Call Google Gemini 3.6 Flash to faithfully translate and format the user's exact prompt for coloring line art
                 $geminiTextUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={$this->apiKey}";
                 $textResponse = Http::withHeaders(['Content-Type' => 'application/json'])
                     ->timeout(20)
                     ->post($geminiTextUrl, [
                         'contents' => [
-                            ['parts' => [['text' => "You are an expert Amazon KDP Coloring Book Art Director specializing in children's books (ages 3-8). Refine this subject into a 1-sentence prompt for a super cute, smiling, friendly cartoon baby animal or character: '{$prompt}'. Rules: Must be simple 2D cartoon line art with thick outlines, empty white interiors to color, zero shading, zero 3D, zero grayscale. Return ONLY the refined English prompt."]]]
+                            ['parts' => [['text' => "You are an Amazon KDP Coloring Book prompt engineer. Translate and format the user's prompt into an English coloring book line art prompt. User prompt: '{$prompt}'. Rules: Strictly preserve the exact subject, animals/elements, and setting requested by the user. Ensure pure white background, clean bold black line art, empty open areas to color, zero shading, zero black solid fills. Return ONLY the refined English prompt string."]]]
                         ]
                     ]);
 
@@ -65,10 +66,12 @@ class GeminiImageService
             }
         }
 
-        // Try FLUX AI engine for authentic Bobbie Goods style, bold and easy 2D coloring pages
+        // Try FLUX AI engine with clean white background line art prompt
+        $cleanLineArtPrompt = "coloring book page, {$enhancedPrompt}, clean bold black line art, pure solid white background, completely empty white coloring spaces, zero shading, zero grayscale, zero black fills, white background only, simple clean vector outlines, no colors";
+        
         $attempts = [
-            "https://image.pollinations.ai/prompt/" . urlencode("Bobbie Goods style coloring book page, bold and easy coloring page for kids, cute cartoon {$enhancedPrompt}, thick uniform black line art, pure white background, completely empty white shapes to color, zero shading, zero grayscale, zero textures, clean 2d vector line art, simple cute kawaii cartoon style, clear outer square border") . "?width=1024&height=1024&model=flux&nologo=true&seed=" . rand(1000, 999999),
-            "https://image.pollinations.ai/prompt/" . urlencode("Bobbie Goods style coloring book page, bold and easy coloring page for kids, cute cartoon {$enhancedPrompt}, thick uniform black line art, pure white background, completely empty white shapes to color, zero shading, zero grayscale, clean 2d vector line art") . "?width=1024&height=1024&model=turbo&nologo=true&seed=" . rand(1000, 999999),
+            "https://image.pollinations.ai/prompt/" . urlencode($cleanLineArtPrompt) . "?width=1024&height=1024&model=flux&nologo=true&seed=" . rand(1000, 999999),
+            "https://image.pollinations.ai/prompt/" . urlencode($cleanLineArtPrompt) . "?width=1024&height=1024&model=turbo&nologo=true&seed=" . rand(1000, 999999),
         ];
 
         foreach ($attempts as $fluxUrl) {
@@ -83,14 +86,14 @@ class GeminiImageService
 
                     \App\Models\TokenUsage::create([
                         'book_id' => $bookId,
-                        'model' => 'flux-bobbie-goods-kdp',
+                        'model' => 'flux-kdp-coloring-engine',
                         'operation_type' => 'image_generation',
-                        'prompt_tokens' => max(20, (int)(strlen($fullPrompt) / 4)),
+                        'prompt_tokens' => max(20, (int)(strlen($cleanLineArtPrompt) / 4)),
                         'candidates_tokens' => 1024,
-                        'total_tokens' => max(20, (int)(strlen($fullPrompt) / 4)) + 1024,
+                        'total_tokens' => max(20, (int)(strlen($cleanLineArtPrompt) / 4)) + 1024,
                         'estimated_cost_usd' => 0.00000,
                         'metadata' => [
-                            'engine' => 'flux-bobbie-goods-engine',
+                            'engine' => 'flux-coloring-engine',
                             'prompt' => $enhancedPrompt,
                         ],
                     ]);
@@ -106,7 +109,6 @@ class GeminiImageService
             }
         }
 
-        // If all network calls fail, return error instead of geometric mandala
         return [
             'success' => false,
             'message' => 'Falha ao conectar com o motor de ilustração da IA. Tente novamente.'
@@ -114,7 +116,7 @@ class GeminiImageService
     }
 
     /**
-     * Post-processes coloring page: scales inside KDP margins, applies pixel binarization, and draws outer frame
+     * Post-processes coloring page: scales cleanly inside KDP safe margins and draws neat outer frame
      */
     protected function processKdpColoringPage(string $rawBinary): string
     {
@@ -134,35 +136,17 @@ class GeminiImageService
         $black = imagecolorallocate($canvas, 0, 0, 0);
         imagefill($canvas, 0, 0, $white);
 
-        // Safe margin of 60px inside the page
-        $margin = 60;
+        // Safe margin of 50px inside the page
+        $margin = 50;
         $innerW = $targetW - ($margin * 2);
         $innerH = $targetH - ($margin * 2);
 
         imagecopyresampled($canvas, $src, $margin, $margin, 0, 0, $innerW, $innerH, $width, $height);
         imagedestroy($src);
 
-        // Pixel-level binarization: guarantees 100% pure black outlines (#000000) on pure white (#FFFFFF)
-        for ($x = 0; $x < $targetW; $x++) {
-            for ($y = 0; $y < $targetH; $y++) {
-                $rgb = imagecolorat($canvas, $x, $y);
-                $r = ($rgb >> 16) & 0xFF;
-                $g = ($rgb >> 8) & 0xFF;
-                $b = $rgb & 0xFF;
-                $gray = (int)($r * 0.299 + $g * 0.587 + $b * 0.114);
-
-                // Threshold: pixel lighter than 175 becomes white, otherwise solid black
-                if ($gray > 175) {
-                    imagesetpixel($canvas, $x, $y, $white);
-                } else {
-                    imagesetpixel($canvas, $x, $y, $black);
-                }
-            }
-        }
-
         // Draw elegant Amazon KDP outer page frame
-        imagesetthickness($canvas, 6);
-        imagerectangle($canvas, 40, 40, $targetW - 40, $targetH - 40, $black);
+        imagesetthickness($canvas, 5);
+        imagerectangle($canvas, 35, 35, $targetW - 35, $targetH - 35, $black);
 
         ob_start();
         imagepng($canvas);
