@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect, useCallback } from "react"
 import useSWR from "swr"
@@ -402,14 +402,21 @@ export function CurateDialog({ book, isOpen, onClose, onUpdated }: CurateDialogP
                               ? "border-emerald-500"
                               : img.status === "rejected"
                               ? "border-red-400"
-                              : ""
+                              : "border-amber-400"
                           }`}
                         >
-                          <img
-                            src={getImageSrc(img)}
-                            alt={`Thumb ${idx + 1}`}
-                            className="w-full h-full object-cover bg-white"
-                          />
+                          {img.status === "queued" || img.status === "generating" ? (
+                            <div className="w-full h-full bg-slate-100 flex flex-col items-center justify-center p-1">
+                              <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                              <span className="text-[7px] font-bold text-slate-500 mt-0.5">Gerando</span>
+                            </div>
+                          ) : (
+                            <img
+                              src={getImageSrc(img)}
+                              alt={`Thumb ${idx + 1}`}
+                              className="w-full h-full object-cover bg-white"
+                            />
+                          )}
                           <span className="absolute bottom-0 inset-x-0 bg-slate-900/80 text-white text-[8px] font-bold text-center leading-tight py-0.5">
                             #{idx + 1}
                           </span>

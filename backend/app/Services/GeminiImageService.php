@@ -65,63 +65,56 @@ class GeminiImageService
             }
         }
 
-        // Try FLUX AI engine for authentic, kid-friendly 2D Amazon KDP coloring pages
-        try {
-            $fluxPrompt = "simple 2d coloring page for toddlers and kids, cute cartoon {$enhancedPrompt}, bold thick black line art, pure solid white background, completely empty white interior shapes ready for coloring, zero shading, zero grayscale, zero 3d rendering, flat vector outline, children coloring book style, high contrast, clean outlines";
-            $fluxUrl = "https://image.pollinations.ai/prompt/" . urlencode($fluxPrompt) . "?width=1024&height=1365&model=flux&nologo=true&seed=" . rand(1000, 999999);
-            
-            $fluxResp = Http::timeout(30)->get($fluxUrl);
-            if ($fluxResp->successful() && strlen($fluxResp->body()) > 5000) {
-                $processedImage = $this->processKdpColoringPage($fluxResp->body());
+        // Try FLUX AI engine for authentic Bobbie Goods style, bold and easy 2D coloring pages
+        $attempts = [
+            "https://image.pollinations.ai/prompt/" . urlencode("Bobbie Goods style coloring book page, bold and easy coloring page for kids, cute cartoon {$enhancedPrompt}, thick uniform black line art, pure white background, completely empty white shapes to color, zero shading, zero grayscale, zero textures, clean 2d vector line art, simple cute kawaii cartoon style, clear outer square border") . "?width=1024&height=1024&model=flux&nologo=true&seed=" . rand(1000, 999999),
+            "https://image.pollinations.ai/prompt/" . urlencode("Bobbie Goods style coloring book page, bold and easy coloring page for kids, cute cartoon {$enhancedPrompt}, thick uniform black line art, pure white background, completely empty white shapes to color, zero shading, zero grayscale, clean 2d vector line art") . "?width=1024&height=1024&model=turbo&nologo=true&seed=" . rand(1000, 999999),
+        ];
 
-                \App\Models\TokenUsage::create([
-                    'book_id' => $bookId,
-                    'model' => 'flux-1-schnell-kdp',
-                    'operation_type' => 'image_generation',
-                    'prompt_tokens' => max(20, (int)(strlen($fluxPrompt) / 4)),
-                    'candidates_tokens' => 1024,
-                    'total_tokens' => max(20, (int)(strlen($fluxPrompt) / 4)) + 1024,
-                    'estimated_cost_usd' => 0.00000,
-                    'metadata' => [
-                        'engine' => 'flux-kids-coloring-engine',
-                        'prompt' => $enhancedPrompt,
-                    ],
-                ]);
+        foreach ($attempts as $fluxUrl) {
+            try {
+                $fluxResp = Http::withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept' => 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+                ])->timeout(55)->get($fluxUrl);
 
-                return [
-                    'success' => true,
-                    'image_data' => base64_encode($processedImage),
-                    'mime_type' => 'image/png'
-                ];
+                if ($fluxResp->successful() && strlen($fluxResp->body()) > 5000) {
+                    $processedImage = $this->processKdpColoringPage($fluxResp->body());
+
+                    \App\Models\TokenUsage::create([
+                        'book_id' => $bookId,
+                        'model' => 'flux-bobbie-goods-kdp',
+                        'operation_type' => 'image_generation',
+                        'prompt_tokens' => max(20, (int)(strlen($fullPrompt) / 4)),
+                        'candidates_tokens' => 1024,
+                        'total_tokens' => max(20, (int)(strlen($fullPrompt) / 4)) + 1024,
+                        'estimated_cost_usd' => 0.00000,
+                        'metadata' => [
+                            'engine' => 'flux-bobbie-goods-engine',
+                            'prompt' => $enhancedPrompt,
+                        ],
+                    ]);
+
+                    return [
+                        'success' => true,
+                        'image_data' => base64_encode($processedImage),
+                        'mime_type' => 'image/png'
+                    ];
+                }
+            } catch (\Exception $e) {
+                Log::warning('Coloring page generation attempt failed: ' . $e->getMessage());
             }
-        } catch (\Exception $e) {
-            Log::warning('FLUX AI image call failed: ' . $e->getMessage());
         }
 
-        // Generate local coloring page and track local simulation
-        \App\Models\TokenUsage::create([
-            'book_id' => $bookId,
-            'model' => 'local-procedural-gd',
-            'operation_type' => 'local_simulation',
-            'prompt_tokens' => max(10, (int)(strlen($fullPrompt) / 4)),
-            'candidates_tokens' => 500,
-            'total_tokens' => max(10, (int)(strlen($fullPrompt) / 4)) + 500,
-            'estimated_cost_usd' => 0.00000,
-            'metadata' => ['mode' => 'local_gd'],
-        ]);
-
-        // Generate a crisp, valid coloring book page PNG locally via GD
-        $imageData = $this->createColoringPagePng($enhancedPrompt);
-
+        // If all network calls fail, return error instead of geometric mandala
         return [
-            'success' => true,
-            'image_data' => base64_encode($imageData),
-            'mime_type' => 'image/png'
+            'success' => false,
+            'message' => 'Falha ao conectar com o motor de ilustração da IA. Tente novamente.'
         ];
     }
 
     /**
-     * Post-processes coloring page: scales inside KDP margins, draws border frame, and binarizes lines
+     * Post-processes coloring page: scales inside KDP margins, applies pixel binarization, and draws outer frame
      */
     protected function processKdpColoringPage(string $rawBinary): string
     {
@@ -134,28 +127,42 @@ class GeminiImageService
         $height = imagesy($src);
 
         $targetW = 1024;
-        $targetH = 1365;
+        $targetH = 1024;
         $canvas = imagecreatetruecolor($targetW, $targetH);
 
         $white = imagecolorallocate($canvas, 255, 255, 255);
-        $black = imagecolorallocate($canvas, 10, 10, 10);
+        $black = imagecolorallocate($canvas, 0, 0, 0);
         imagefill($canvas, 0, 0, $white);
 
-        // Safe margin of 70px inside the page
-        $margin = 70;
+        // Safe margin of 60px inside the page
+        $margin = 60;
         $innerW = $targetW - ($margin * 2);
         $innerH = $targetH - ($margin * 2);
 
         imagecopyresampled($canvas, $src, $margin, $margin, 0, 0, $innerW, $innerH, $width, $height);
         imagedestroy($src);
 
+        // Pixel-level binarization: guarantees 100% pure black outlines (#000000) on pure white (#FFFFFF)
+        for ($x = 0; $x < $targetW; $x++) {
+            for ($y = 0; $y < $targetH; $y++) {
+                $rgb = imagecolorat($canvas, $x, $y);
+                $r = ($rgb >> 16) & 0xFF;
+                $g = ($rgb >> 8) & 0xFF;
+                $b = $rgb & 0xFF;
+                $gray = (int)($r * 0.299 + $g * 0.587 + $b * 0.114);
+
+                // Threshold: pixel lighter than 175 becomes white, otherwise solid black
+                if ($gray > 175) {
+                    imagesetpixel($canvas, $x, $y, $white);
+                } else {
+                    imagesetpixel($canvas, $x, $y, $black);
+                }
+            }
+        }
+
         // Draw elegant Amazon KDP outer page frame
         imagesetthickness($canvas, 6);
-        imagerectangle($canvas, 45, 45, $targetW - 45, $targetH - 45, $black);
-
-        // Apply grayscale and high contrast to ensure clean black line art on pure white paper
-        imagefilter($canvas, IMG_FILTER_CONTRAST, -35);
-        imagefilter($canvas, IMG_FILTER_GRAYSCALE);
+        imagerectangle($canvas, 40, 40, $targetW - 40, $targetH - 40, $black);
 
         ob_start();
         imagepng($canvas);
@@ -215,82 +222,6 @@ class GeminiImageService
         }
 
         return ['success' => false, 'message' => 'Falha ao gerar capa com IA.'];
-    }
-
-    /**
-     * Creates a valid, high-resolution coloring page PNG image for KDP mockup
-     */
-    protected function createColoringPagePng(string $prompt): string
-    {
-        $width = 1000;
-        $height = 1300;
-        $image = imagecreatetruecolor($width, $height);
-
-        // White background
-        $white = imagecolorallocate($image, 255, 255, 255);
-        $black = imagecolorallocate($image, 20, 20, 20);
-
-        imagefill($image, 0, 0, $white);
-
-        // Draw double outer border (coloring book frame)
-        imagesetthickness($image, 8);
-        imagerectangle($image, 40, 40, $width - 40, $height - 40, $black);
-        imagesetthickness($image, 3);
-        imagerectangle($image, 55, 55, $width - 55, $height - 55, $black);
-
-        // Draw geometric decorative coloring elements
-        imagesetthickness($image, 5);
-
-        // Central mandala / decorative motif
-        $centerX = $width / 2;
-        $centerY = ($height / 2) - 60;
-        
-        // Concentric circles with patterns
-        imageellipse($image, $centerX, $centerY, 450, 450, $black);
-        imageellipse($image, $centerX, $centerY, 350, 350, $black);
-        imageellipse($image, $centerX, $centerY, 250, 250, $black);
-        imageellipse($image, $centerX, $centerY, 120, 120, $black);
-
-        // Petals / Rays
-        for ($angle = 0; $angle < 360; $angle += 30) {
-            $rad = deg2rad($angle);
-            $x1 = $centerX + (int)(cos($rad) * 60);
-            $y1 = $centerY + (int)(sin($rad) * 60);
-            $x2 = $centerX + (int)(cos($rad) * 225);
-            $y2 = $centerY + (int)(sin($rad) * 225);
-            imageline($image, $x1, $y1, $x2, $y2, $black);
-
-            $x3 = $centerX + (int)(cos($rad) * 175);
-            $y3 = $centerY + (int)(sin($rad) * 175);
-            imageellipse($image, $x3, $y3, 40, 40, $black);
-        }
-
-        // Decorative corner ornaments
-        $corners = [
-            [100, 100],
-            [$width - 100, 100],
-            [100, $height - 180],
-            [$width - 100, $height - 180]
-        ];
-        foreach ($corners as [$cx, $cy]) {
-            imageellipse($image, $cx, $cy, 60, 60, $black);
-            imageellipse($image, $cx, $cy, 30, 30, $black);
-        }
-
-        // Caption at bottom with prompt snippet
-        $cleanPrompt = substr(strip_tags($prompt), 0, 60);
-        $font = 5;
-        $text = "KDP COLORING BOOK: " . strtoupper($cleanPrompt);
-        $textWidth = imagefontwidth($font) * strlen($text);
-        $textX = max(60, ($width - $textWidth) / 2);
-        imagestring($image, $font, (int)$textX, $height - 100, $text, $black);
-
-        ob_start();
-        imagepng($image);
-        $data = ob_get_clean();
-        imagedestroy($image);
-
-        return $data;
     }
 
     /**
