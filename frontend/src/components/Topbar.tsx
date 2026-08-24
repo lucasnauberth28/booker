@@ -1,8 +1,9 @@
-﻿"use client"
+"use client"
 
 import React from "react"
 import { BookOpen, Plus, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { UsageWidget } from "@/components/UsageWidget"
 
 interface TopbarProps {
   onNewBook: () => void
@@ -26,6 +27,8 @@ export function Topbar({ onNewBook, onOpenSetups }: TopbarProps) {
 
         {/* Primary Header Actions */}
         <div className="flex items-center space-x-2.5">
+          <UsageWidget />
+
           <Button
             variant="ghost"
             size="sm"

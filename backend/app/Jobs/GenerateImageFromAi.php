@@ -39,7 +39,7 @@ class GenerateImageFromAi implements ShouldQueue
         $promptText = $promptModel->base_prompt;
         $styleModifiers = $promptModel->style_modifiers ?? [];
         
-        $response = $geminiService->generateImage($promptText, $styleModifiers);
+        $response = $geminiService->generateImage($promptText, $styleModifiers, $this->image->book_id);
         
         if ($response['success']) {
             $path = "books/{$this->image->book_id}/images/{$this->image->id}_" . time() . ".png";

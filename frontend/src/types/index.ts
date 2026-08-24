@@ -52,3 +52,45 @@ export interface ImageRecord {
   created_at: string;
   updated_at: string;
 }
+
+export interface TokenUsageRecord {
+  id: number;
+  book_id: number | null;
+  model: string;
+  operation_type: string;
+  prompt_tokens: number;
+  candidates_tokens: number;
+  total_tokens: number;
+  estimated_cost_usd: number;
+  metadata: any;
+  book?: {
+    id: number;
+    titulo: string;
+    nicho: string;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UsageSummary {
+  total_tokens: number;
+  prompt_tokens: number;
+  candidates_tokens: number;
+  total_requests: number;
+  estimated_cost_usd: number;
+  estimated_cost_brl: number;
+  quota: {
+    configured: boolean;
+    status: 'active' | 'missing_key' | 'invalid_key' | 'unreachable';
+    message: string;
+    model?: string;
+    tier?: string;
+    rate_limit_remaining?: string | null;
+    limits?: {
+      rpm: string;
+      tpm: string;
+      rpd: string;
+    };
+  };
+  recent_calls: TokenUsageRecord[];
+}

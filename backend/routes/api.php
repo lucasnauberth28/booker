@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\PromptController;
 use App\Http\Controllers\Api\ImageController;
 use App\Http\Controllers\Api\GenerationController;
 use App\Http\Controllers\Api\CompilationController;
+use App\Http\Controllers\Api\UsageController;
 
 // Setups
 Route::apiResource('setups', SetupController::class);
@@ -22,7 +23,11 @@ Route::prefix('books/{book}')->group(function () {
     Route::post('generate', [GenerationController::class, 'generate']);
     Route::post('compile', [CompilationController::class, 'compile']);
     Route::get('download-pdf', [CompilationController::class, 'download']);
+    Route::get('usage', [UsageController::class, 'bookUsage']);
 });
 
 // Image status update (standalone)
 Route::patch('images/{image}/status', [ImageController::class, 'updateStatus']);
+
+// Token & Quota Usage
+Route::get('usage/summary', [UsageController::class, 'summary']);

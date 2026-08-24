@@ -1,7 +1,9 @@
-﻿"use client"
+"use client"
 
 import React, { useState } from "react"
+import useSWR from "swr"
 import { Book, Prompt } from "@/types"
+import { fetcher } from "@/lib/fetcher"
 import {
   Sheet,
   SheetContent,
@@ -65,6 +67,13 @@ export function BookManagementSheet({
   const [promptToDelete, setPromptToDelete] = useState<Prompt | null>(null)
 
   if (!book) return null
+
+  const { data: bookUsage } = useSWR<{
+    total_tokens: number;
+    total_requests: number;
+    estimated_cost_usd: number;
+    estimated_cost_brl: number;
+  }>(book && isOpen ? `/books/${book.id}/usage` : null, fetcher)
 
   const approved = book.images_count?.approved || 0
   const rejected = book.images_count?.rejected || 0
@@ -173,6 +182,17 @@ export function BookManagementSheet({
                   <span className="text-[10px] font-bold uppercase text-red-700 block">Rejeitadas</span>
                   <strong className="text-base font-black text-red-800">{rejected}</strong>
                 </div>
+              </div>
+
+              {/* Book Token Consumption Badge */}
+              <div className="flex items-center justify-between text-[11px] bg-white p-2 rounded-xl border border-slate-200/80 text-slate-600 font-medium">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                  Tokens gastos neste livro:
+                </span>
+                <span className="font-bold text-slate-900">
+                  {(bookUsage?.total_tokens || 0).toLocaleString("pt-BR")} tok (~R$ {(bookUsage?.estimated_cost_brl || 0).toFixed(2)})
+                </span>
               </div>
             </div>
 

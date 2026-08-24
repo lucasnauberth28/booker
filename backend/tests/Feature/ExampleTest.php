@@ -192,5 +192,20 @@ class ExampleTest extends TestCase
         $book->refresh();
         $this->assertEquals('ready', $book->status);
     }
+
+    public function test_can_fetch_token_usage_summary(): void
+    {
+        $response = $this->getJson('/api/usage/summary');
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'total_tokens',
+                'prompt_tokens',
+                'candidates_tokens',
+                'total_requests',
+                'estimated_cost_usd',
+                'estimated_cost_brl',
+                'quota',
+            ]);
+    }
 }
 

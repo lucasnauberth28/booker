@@ -16,7 +16,7 @@ class GeminiImageService
         $this->model = config('services.gemini.model', 'imagen-3.0-generate-002');
     }
 
-    public function generateImage(string $prompt, array $styleModifiers = []): array
+    public function generateImage(string $prompt, array $styleModifiers = [], ?int $bookId = null): array
     {
         $modifiers = !empty($styleModifiers) ? ' Style modifiers: ' . implode(', ', $styleModifiers) : '';
         $fullPrompt = "Coloring book page for Amazon KDP, clean black and white line art, pure white background, no grayscale, no shading, thick clear outlines: " . $prompt . $modifiers;
@@ -43,6 +43,22 @@ class GeminiImageService
                     $data = $response->json();
                     $b64 = $data['predictions'][0]['bytesBase64Encoded'] ?? null;
                     if ($b64) {
+                        // Record Token Usage for Imagen 3
+                        $promptTokenCount = max(10, (int)(strlen($fullPrompt) / 4));
+                        \App\Models\TokenUsage::create([
+                            'book_id' => $bookId,
+                            'model' => 'imagen-3.0-generate-002',
+                            'operation_type' => 'image_generation',
+                            'prompt_tokens' => $promptTokenCount,
+                            'candidates_tokens' => 1024,
+                            'total_tokens' => $promptTokenCount + 1024,
+                            'estimated_cost_usd' => 0.03000,
+                            'metadata' => [
+                                'prompt_snippet' => substr($prompt, 0, 100),
+                                'api_response_status' => 200,
+                            ],
+                        ]);
+
                         return [
                             'success' => true,
                             'image_data' => $b64,
@@ -52,7 +68,7 @@ class GeminiImageService
                 }
 
                 // Fallback to Gemini 2.0 generateContent endpoint if Imagen is unavailable
-                $geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={$this->apiKey}";
+                $geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$this->apiKey}";
                 $response2 = Http::withHeaders(['Content-Type' => 'application/json'])
                     ->timeout(60)
                     ->post($geminiUrl, [
@@ -63,6 +79,24 @@ class GeminiImageService
 
                 if ($response2->successful()) {
                     $data = $response2->json();
+                    $usage = $data['usageMetadata'] ?? [];
+                    $promptTokens = $usage['promptTokenCount'] ?? max(10, (int)(strlen($fullPrompt) / 4));
+                    $candidatesTokens = $usage['candidatesTokenCount'] ?? 250;
+                    $totalTokens = $usage['totalTokenCount'] ?? ($promptTokens + $candidatesTokens);
+
+                    \App\Models\TokenUsage::create([
+                        'book_id' => $bookId,
+                        'model' => 'gemini-2.0-flash',
+                        'operation_type' => 'image_generation',
+                        'prompt_tokens' => $promptTokens,
+                        'candidates_tokens' => $candidatesTokens,
+                        'total_tokens' => $totalTokens,
+                        'estimated_cost_usd' => ($totalTokens / 1000000) * 0.15,
+                        'metadata' => [
+                            'prompt_snippet' => substr($prompt, 0, 100),
+                        ],
+                    ]);
+
                     $candidates = $data['candidates'] ?? [];
                     foreach ($candidates as $cand) {
                         $parts = $cand['content']['parts'] ?? [];
@@ -81,6 +115,18 @@ class GeminiImageService
                 Log::warning('Gemini API call failed, generating procedural coloring page fallback: ' . $e->getMessage());
             }
         }
+
+        // Generate local coloring page and track local simulation
+        \App\Models\TokenUsage::create([
+            'book_id' => $bookId,
+            'model' => 'local-procedural-gd',
+            'operation_type' => 'local_simulation',
+            'prompt_tokens' => max(10, (int)(strlen($fullPrompt) / 4)),
+            'candidates_tokens' => 500,
+            'total_tokens' => max(10, (int)(strlen($fullPrompt) / 4)) + 500,
+            'estimated_cost_usd' => 0.00000,
+            'metadata' => ['mode' => 'local_gd'],
+        ]);
 
         // Generate a crisp, valid coloring book page PNG locally via GD
         $imageData = $this->createColoringPagePng($prompt);
@@ -162,9 +208,70 @@ class GeminiImageService
 
         ob_start();
         imagepng($image);
-        $pngData = ob_get_clean();
+        $data = ob_get_clean();
         imagedestroy($image);
 
-        return $pngData;
+        return $data;
+    }
+
+    /**
+     * Checks API connectivity and basic quota indicators
+     */
+    public function checkQuotaStatus(): array
+    {
+        $hasKey = !empty($this->apiKey) && !str_starts_with($this->apiKey, 'your-');
+        
+        if (!$hasKey) {
+            return [
+                'configured' => false,
+                'status' => 'missing_key',
+                'message' => 'Nenhuma chave configurada. O sistema opera no modo simulador local.',
+                'tier' => 'Local Simulator',
+                'limits' => [
+                    'rpm' => 'Ilimitado (Local)',
+                    'tpm' => 'Ilimitado (Local)',
+                    'rpd' => 'Ilimitado (Local)',
+                ]
+            ];
+        }
+
+        try {
+            // Lightweight model query to test key
+            $testUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash?key={$this->apiKey}";
+            $response = Http::timeout(10)->get($testUrl);
+
+            if ($response->successful()) {
+                $headers = $response->headers();
+                $ratelimitRemaining = $headers['x-ratelimit-remaining-requests'][0] ?? null;
+
+                return [
+                    'configured' => true,
+                    'status' => 'active',
+                    'message' => 'Conectado com sucesso ao Google Gemini PRO / Imagen 3',
+                    'model' => $this->model,
+                    'tier' => 'Google AI Studio (Gemini Pro / Pay-as-you-go)',
+                    'rate_limit_remaining' => $ratelimitRemaining,
+                    'limits' => [
+                        'rpm' => 'Até 15-360 RPM',
+                        'tpm' => '4.000.000 TPM',
+                        'rpd' => '1.500 - Ilimitado RPD',
+                    ]
+                ];
+            }
+
+            return [
+                'configured' => true,
+                'status' => 'invalid_key',
+                'message' => 'Chave configurada, mas o Google retornou erro: ' . ($response->json()['error']['message'] ?? $response->status()),
+                'tier' => 'Desconhecido',
+            ];
+        } catch (\Exception $e) {
+            return [
+                'configured' => true,
+                'status' => 'unreachable',
+                'message' => 'Falha de conexão com a API do Google: ' . $e->getMessage(),
+                'tier' => 'Desconhecido',
+            ];
+        }
     }
 }

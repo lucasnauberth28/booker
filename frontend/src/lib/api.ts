@@ -42,4 +42,8 @@ export const api = {
     updateStatus: (id: number, status: 'approved' | 'rejected') => fetchApi<ImageRecord>(`/images/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
     reorder: (bookId: number, images: { id: number; page_order: number }[]) => fetchApi<void>(`/books/${bookId}/images/reorder`, { method: 'POST', body: JSON.stringify({ images }) }),
   },
+  usage: {
+    summary: () => fetchApi<any>('/usage/summary'),
+    book: (bookId: number) => fetchApi<any>(`/books/${bookId}/usage`),
+  },
 };
